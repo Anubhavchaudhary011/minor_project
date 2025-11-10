@@ -1,35 +1,48 @@
-from flask import Flask, request, jsonify
-import joblib
-from preprocess import clean_text
-from sentiment import vader_sentiment
+from flask import Flask, jsonify, request
+import requests
+from predict import run_prediction
+from dotenv import load_dotenv
+import os
 
-# Load trained model
-model = joblib.load("model.pkl")
+load_dotenv()
 
 app = Flask(__name__)
 
-@app.route("/", methods=["GET"])
-def home():
-    return "✅ Mental Health NLP API is running!"
+TOKEN = os.getenv("REDDIT_ACCESS_TOKEN")
+USER_AGENT = os.getenv("USER_AGENT")
+MODEL_PATH = "models/distilroberta-mental-health"
 
-@app.route("/analyze", methods=["POST"])
+# ✅ GET POSTS FROM REDDIT
+@app.get("/reddit/<subreddit>")
+def get_posts(subreddit):
+    url = f"https://oauth.reddit.com/r/{subreddit}/hot"
+    headers = {
+        "Authorization": f"Bearer {TOKEN}",
+        "User-Agent": USER_AGENT
+    }
+
+    r = requests.get(url, headers=headers).json()
+
+    posts = []
+    for c in r.get("data", {}).get("children", []):
+        data = c["data"]
+        posts.append({
+            "id": data["id"],
+            "title": data["title"],
+            "text": data.get("selftext", "")
+        })
+
+    return jsonify(posts)
+
+
+# ✅ RUN PREDICTION
+@app.post("/analyze")
 def analyze():
-    data = request.json
-    text = data.get("text", "")
-    if not text:
-        return jsonify({"error": "No text provided"}), 400
+    text = request.json.get("text")
 
-    text_cleaned = clean_text(text)
-    pred = model.predict([text_cleaned])[0]
-    score = float(model.predict_proba([text_cleaned])[0].max())
-    sent = vader_sentiment(text)
+    result = run_prediction(MODEL_PATH, text)
 
-    return jsonify({
-        "text": text,
-        "predicted_label": pred,
-        "confidence": score,
-        "vader_sentiment": sent
-    })
+    return jsonify(result)
 
-if __name__ == "__main__":
-    app.run(debug=True)
+
+app.run(debug=True)

@@ -1,29 +1,31 @@
-import pandas as pd
+import argparse
+from sklearn.decomposition import LatentDirichletAllocation
+from sklearn.feature_extraction.text import CountVectorizer
+from preprocess import clean_text
+from evaluate_utils import load_from_csv
 
-def load_from_csv(path: str) -> pd.DataFrame:
-    """
-    Load a CSV for text classification.
 
-    Args:
-        path (str): Path to the CSV file.
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--data', required=True)
+    ap.add_argument('--n_topics', type=int, default=5)
+    ap.add_argument('--max_features', type=int, default=5000)
+    args = ap.parse_args()
 
-    Returns:
-        pd.DataFrame: DataFrame with at least a 'text' column.
-    """
-    df = pd.read_csv(path)
-    
-    # Check required column
-    if "text" not in df.columns:
-        raise ValueError("CSV must contain a 'text' column")
-    
-    # Fill missing text
-    df["text"] = df["text"].fillna("")
+    df = load_from_csv(args.data)
+    texts = [clean_text(t) for t in df["text"]]
 
-    # Check for optional label column
-    if "label" not in df.columns:
-        print("⚠️ 'label' column not found. Assuming inference mode.")
-    else:
-        print(f"✅ Found label column. Number of classes: {df['label'].nunique()}")
+    vect = CountVectorizer(max_features=args.max_features, stop_words="english")
+    X = vect.fit_transform(texts)
 
-    print(f"Loaded {len(df)} rows from {path}")
-    return df
+    lda = LatentDirichletAllocation(n_components=args.n_topics, random_state=42)
+    lda.fit(X)
+
+    terms = vect.get_feature_names_out()
+    for i, comp in enumerate(lda.components_):
+        words = [terms[j] for j in comp.argsort()[-10:]]
+        print(f"Topic {i}: {', '.join(words)}")
+
+
+if __name__ == "__main__":
+    main()
