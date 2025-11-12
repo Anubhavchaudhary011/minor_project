@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>Mental Health Reddit Analyzer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+
+  <!-- Professional Font -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    /* GLOBAL */
+    body {
+      font-family: "Inter", sans-serif;
+      background: #f5f6fa;
+      color: #222;
+      margin: 30px;
+      line-height: 1.5;
+    }
+
+    h2 {
+      margin-bottom: 24px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    h3 {
+      margin-top: 32px;
+      margin-bottom: 12px;
+      font-weight: 500;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: auto;
+    }
+
+    /* FORM CONTROLS */
+    select {
+      padding: 10px 12px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      background: white;
+      font-size: 15px;
+      outline: none;
+      cursor: pointer;
+      min-width: 220px;
+    }
+
+    button {
+      padding: 10px 16px;
+      background: #1a73e8;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 15px;
+      transition: background 0.2s ease;
+    }
+
+    button:hover {
+      background: #1664c4;
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+
+    /* CARDS */
+    .card {
+      background: white;
+      border: 1px solid #e5e5e5;
+      padding: 16px;
+      border-radius: 8px;
+      margin: 12px 0;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+
+    .card h3 {
+      margin: 0 0 8px 0;
+      font-size: 18px;
+      color: #333;
+    }
+
+    /* RESULTS BOX */
+    #results {
+      background: #fff;
+      border: 1px solid #e5e5e5;
+      padding: 16px;
+      border-radius: 8px;
+      white-space: pre-wrap;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+
+  </style>
+</head>
+
+<body>
+<div class="container">
+
+  <h2>Mental Health Reddit Analyzer</h2>
+
+  <!-- DROPDOWN (Single + MIX_ALL) -->
+  <div class="row">
+    <label for="subreddit"><strong>Select Source:</strong></label>
+    <select id="subreddit">
+      <option value="Anxiety">Anxiety</option>
+      <option value="depression">depression</option>
+      <option value="bipolar">bipolar</option>
+      <option value="mentalillness">mentalillness</option>
+      <option value="BPD">BPD</option>
+      <option value="schizophrenia">schizophrenia</option>
+      <option value="MIX_ALL">Mix All Disorders</option>
+      <option value="RANDOM_ALL">Random From r/all</option>
+    </select>
+
+    <button id="load">Load Posts</button>
+  </div>
+
+  <!-- POSTS -->
+  <h3>Posts</h3>
+  <div id="posts"></div>
+
+  <!-- ANALYSIS -->
+  <h3>Analysis</h3>
+  <div id="results"></div>
+
+  <!-- DOCTORS -->
+  <h3>Nearby Doctors</h3>
+  <div id="doctors"></div>
+
+</div>
+
+  <script src="/static/script.js"></script>
+</body>
+</html>

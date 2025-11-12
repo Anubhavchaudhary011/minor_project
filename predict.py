@@ -1,105 +1,85 @@
-import joblib
+import os
 import re
+import joblib
+import torch
+from pathlib import Path
+from typing import Dict, Any
+
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
+from preprocess import clean_text
 from sentiment import vader_sentiment
 
 
-# -----------------------------------
-# CLEAN TEXT
-# -----------------------------------
-def clean_text(t):
-    t = str(t).lower()
-    t = re.sub(r"http\S+|www\S+", " ", t)
-    t = re.sub(r"[^a-z\s]", " ", t)
-    t = re.sub(r"\s+", " ", t)
-    return t.strip()
+def _is_hf_model_dir(path: str) -> bool:
+    p = Path(path)
+    return p.is_dir() and (p / "config.json").exists()
 
 
-# -----------------------------------
-# FACTUAL STATEMENT DETECTION
-# -----------------------------------
-def is_factual_statement(text, vader_scores):
+def _predict_hf(model_dir: str, text: str):
+    tokenizer = AutoTokenizer.from_pretrained(model_dir)
+    model = AutoModelForSequenceClassification.from_pretrained(model_dir)
+    model.eval()
+    inputs = tokenizer([text], padding=True, truncation=True, max_length=256, return_tensors="pt")
+    with torch.no_grad():
+        logits = model(**inputs).logits
+    probs = torch.softmax(logits, dim=1)[0].tolist()
+    pred_id = int(torch.argmax(logits))
+    id2label = model.config.id2label or {i: str(i) for i in range(len(probs))}
+    return {"label": id2label.get(pred_id), "confidence": float(max(probs)), "probs": probs}
+
+
+def _predict_sklearn(path: str, text: str):
+    model = joblib.load(path)
+    pred = model.predict([text])[0]
+    confidence = None
+    try:
+        confidence = float(max(model.predict_proba([text])[0]))
+    except:
+        pass
+    return {"label": str(pred), "confidence": confidence}
+
+
+def is_factual_statement(text: str, vader_scores: Dict[str, float]) -> bool:
     text_lower = text.lower().strip()
     wc = len(text_lower.split())
 
-    neu = float(vader_scores.get("neu", 0))
-    pos = float(vader_scores.get("pos", 0))
-    neg = float(vader_scores.get("neg", 0))
-    compound = float(vader_scores.get("compound", 0))
-
-    # Emotional keyword patterns → NOT factual
-    emotional_keywords = [
-        r'\b(feel|feeling|felt)\b',
-        r'\b(sad|happy|angry|worried|anxious|depressed|stressed)\b',
-        r'\b(hate|love|fear|hope)\b',
-        r'\b(struggling|suffering|pain|hurt)\b',
-        r'\b(suicide|kill myself|self harm)\b',
-        r'\b(therapy|medication|diagnosis)\b',
-        r'\b(lonely|isolated|worthless|hopeless)\b'
+    # emotion signals -> NOT factual
+    emotional_words = [
+        r"\bfeel\b", r"\bworried\b", r"\banxious\b", r"\bdepressed\b",
+        r"\bstressed\b", r"\bsuicide\b", r"\bhurt\b", r"\bpain\b"
     ]
-
-    for p in emotional_keywords:
+    for p in emotional_words:
         if re.search(p, text_lower):
             return False
 
-    # Very short → treat as factual
-    if wc < 3:
+    # short → factual
+    if wc <= 2:
         return True
 
-    # Mostly neutral → factual
-    if neu >= 0.85 and abs(compound) <= 0.15:
+    neu = vader_scores.get("neu", 0)
+    comp = abs(vader_scores.get("compound", 0))
+
+    # neutral tone → factual
+    if neu >= 0.90 and comp <= 0.10:
         return True
 
-    # Very low polarity → factual
-    if pos < 0.15 and neg < 0.15:
-        return True
-
-    # Hard factual patterns
-    factual_patterns = [
-        r'\b(today|yesterday|tomorrow)\b',
-        r'\b(monday|tuesday|wednesday|thursday|friday)\b',
-        r'\b(january|february)\b',
-        r'\b(is|are|was|were)\s+\w+\b',
-    ]
-
-    for p in factual_patterns:
-        if re.search(p, text_lower):
-            return True
-
-    return neu >= 0.75
+    return False
 
 
-# -----------------------------------
-# MAIN PREDICTION FUNCTION
-# CALLED AUTOMATICALLY FROM app.py
-# -----------------------------------
-def run_prediction(model_path, text):
-    cleaned = clean_text(text)
-    sentiment_scores = vader_sentiment(text)
+def run_prediction(model_path: str, raw_text: str):
+    cleaned = clean_text(raw_text)
+    sentiment_scores = vader_sentiment(raw_text)
 
-    # 1. Factual detection
-    if is_factual_statement(text, sentiment_scores):
+    if is_factual_statement(raw_text, sentiment_scores):
         return {
             "is_factual": True,
-            "label": "fact",
-            "confidence": None,
+            "prediction": {"label": "fact", "confidence": None},
             "sentiment": sentiment_scores
         }
 
-    # 2. Load the ML model
-    model = joblib.load(model_path)
+    if _is_hf_model_dir(model_path):
+        pred = _predict_hf(model_path, cleaned)
+    else:
+        pred = _predict_sklearn(model_path, cleaned)
 
-    pred = model.predict([cleaned])[0]
-
-    # Confidence score (safe)
-    try:
-        proba = model.predict_proba([cleaned])[0]
-        confidence = float(max(proba))
-    except:
-        confidence = None
-
-    return {
-        "is_factual": False,
-        "label": pred,
-        "confidence": confidence,
-        "sentiment": sentiment_scores
-    }
+    return {"is_factual": False, "prediction": pred, "sentiment": sentiment_scores}

@@ -1,15 +1,16 @@
-from nltk.sentiment.vader import SentimentIntensityAnalyzer
+from nltk.sentiment import SentimentIntensityAnalyzer
 import nltk
-nltk.download('vader_lexicon')
 
+_nltk_ready = False
 _analyzer = None
 
-def _get_analyzer():
-    global _analyzer
-    if _analyzer is None:
+def _ensure():
+    global _nltk_ready, _analyzer
+    if not _nltk_ready:
+        nltk.download('vader_lexicon', quiet=True)
         _analyzer = SentimentIntensityAnalyzer()
-    return _analyzer
+        _nltk_ready = True
 
-def vader_sentiment(text: str) -> dict:
-    sia = _get_analyzer()
-    return sia.polarity_scores(text or "")
+def vader_sentiment(text: str):
+    _ensure()
+    return _analyzer.polarity_scores(text or "")
